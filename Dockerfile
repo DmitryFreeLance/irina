@@ -7,7 +7,7 @@ RUN mvn -q -DskipTests package
 
 FROM eclipse-temurin:17-jre
 WORKDIR /app
-COPY --from=build /app/target/vk-leadbot-1.0.0-shaded.jar /app/bot.jar
+COPY --from=build /app/target/vk-leadbot-1.0.0.jar /app/bot.jar
 ENV DB_PATH=/data/bot.db
 VOLUME /data
 CMD ["java", "-jar", "/app/bot.jar"]

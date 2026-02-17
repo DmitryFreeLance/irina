@@ -13,7 +13,7 @@
 ### Локальный запуск
 ```bash
 mvn -q -DskipTests package
-java -jar target/vk-leadbot-1.0.0-shaded.jar
+java -jar target/vk-leadbot-1.0.0.jar
 ```
 
 ### Docker
