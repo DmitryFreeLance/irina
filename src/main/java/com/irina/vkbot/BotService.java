@@ -202,7 +202,14 @@ public class BotService {
       text.append("Ссылка: ").append(magnet.url);
       sendMessage(peerId, text.toString(), null, null);
     } else {
-      sendMessage(peerId, text.toString(), null, magnet.attachment);
+      boolean sent = sendMessageSafe(peerId, text.toString(), null, magnet.attachment);
+      if (!sent) {
+        if (magnet.url != null && !magnet.url.isEmpty()) {
+          sendMessage(peerId, "Не удалось отправить файл. Вот ссылка на скачивание:\n" + magnet.url, null, null);
+        } else {
+          sendMessage(peerId, "Не удалось отправить файл. Попробуйте позже или обратитесь к администратору.", null, null);
+        }
+      }
     }
     sendMessage(peerId, "Если хотите посмотреть другие материалы, нажмите «Обновить материалы».", refreshKeyboard(), null);
     db.logEvent(userId, "magnet_sent", magnet.id);
@@ -343,8 +350,8 @@ public class BotService {
     }
 
     if (STATE_ADD_FILE.equals(st)) {
-      String attachment = extractDocAttachment(msg);
-      if (attachment == null) {
+      DocInfo info = extractDocInfo(msg);
+      if (info == null) {
         sendMessage(peerId, "Не вижу файла. Отправьте материал документом.", null, null);
         return true;
       }
@@ -352,8 +359,8 @@ public class BotService {
       m.title = data.get("title").getAsString();
       m.description = data.get("description").getAsString();
       m.type = "DOC";
-      m.attachment = attachment;
-      m.url = null;
+      m.attachment = info.attachment;
+      m.url = info.url;
       m.refCode = RefCode.generate();
       m.isActive = true;
       int id = db.createMagnet(m);
@@ -428,12 +435,13 @@ public class BotService {
       }
 
       if ("attachment".equals(field)) {
-        String attachment = extractDocAttachment(msg);
-        if (attachment == null) {
+        DocInfo info = extractDocInfo(msg);
+        if (info == null) {
           sendMessage(peerId, "Не вижу файла. Отправьте документ.", null, null);
           return true;
         }
-        m.attachment = attachment;
+        m.attachment = info.attachment;
+        m.url = info.url;
         m.type = "DOC";
       } else if ("url".equals(field)) {
         if (text.isEmpty()) {
@@ -726,7 +734,7 @@ public class BotService {
     }
   }
 
-  private String extractDocAttachment(LpMessage msg) {
+  private DocInfo extractDocInfo(LpMessage msg) {
     if (msg.attachments == null) {
       return null;
     }
@@ -737,10 +745,18 @@ public class BotService {
         if (doc.access_key != null && !doc.access_key.isEmpty()) {
           base = base + "_" + doc.access_key;
         }
-        return base;
+        DocInfo info = new DocInfo();
+        info.attachment = base;
+        info.url = doc.url;
+        return info;
       }
     }
     return null;
+  }
+
+  private String extractDocAttachment(LpMessage msg) {
+    DocInfo info = extractDocInfo(msg);
+    return info != null ? info.attachment : null;
   }
 
   private String getPendingRef(int userId) {
@@ -748,7 +764,7 @@ public class BotService {
     return u != null ? u.pendingRef : null;
   }
 
-  private void sendMessage(int peerId, String text, String keyboard, String attachment) {
+  private boolean sendMessageSafe(int peerId, String text, String keyboard, String attachment) {
     try {
       int randomId = ThreadLocalRandom.current().nextInt();
       var query = vk.messages().send(actor)
@@ -762,9 +778,15 @@ public class BotService {
         query.attachment(attachment);
       }
       query.execute();
+      return true;
     } catch (Exception e) {
       e.printStackTrace();
+      return false;
     }
+  }
+
+  private void sendMessage(int peerId, String text, String keyboard, String attachment) {
+    sendMessageSafe(peerId, text, keyboard, attachment);
   }
 
   private void sleep(long ms) {
@@ -790,4 +812,9 @@ class RefCode {
     String rand = Integer.toString(ThreadLocalRandom.current().nextInt(100000, 999999), 36);
     return "m" + System.currentTimeMillis() + rand;
   }
+}
+
+class DocInfo {
+  String attachment;
+  String url;
 }
