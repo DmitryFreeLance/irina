@@ -368,6 +368,8 @@ public class BotService {
         sendMessage(peerId, "Не вижу файла. Отправьте материал документом.", null, null);
         return true;
       }
+      System.out.println("[DEBUG] add-file: attachment=" + info.attachment + " url=" + info.url +
+        " msgId=" + msg.id + " convMsgId=" + msg.conversation_message_id + " peerId=" + msg.peer_id);
       Magnet m = new Magnet();
       m.title = data.get("title").getAsString();
       m.description = data.get("description").getAsString();
@@ -870,6 +872,7 @@ public class BotService {
         query.unsafeParam("keyboard", keyboard);
       }
       if (attachment != null) {
+        System.out.println("[DEBUG] send: peer=" + peerId + " attachment=" + attachment);
         query.attachment(attachment);
       }
       query.execute();
