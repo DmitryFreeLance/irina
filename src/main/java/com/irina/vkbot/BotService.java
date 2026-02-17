@@ -759,6 +759,9 @@ public class BotService {
     if (msg.id > 0) {
       return extractDocInfoFromApi(msg.id);
     }
+    if (msg.conversation_message_id > 0) {
+      return extractDocInfoFromConversation(msg.peer_id, msg.conversation_message_id);
+    }
     return null;
   }
 
@@ -785,6 +788,38 @@ public class BotService {
   private DocInfo extractDocInfoFromApi(int messageId) {
     try {
       var resp = vk.messages().getById(actor, messageId)
+        .groupId(config.groupId)
+        .execute();
+      if (resp.getItems() == null || resp.getItems().isEmpty()) {
+        return null;
+      }
+      var msg = resp.getItems().get(0);
+      if (msg.getAttachments() == null) {
+        return null;
+      }
+      for (MessageAttachment att : msg.getAttachments()) {
+        if (att.getType() == MessageAttachmentType.DOC && att.getDoc() != null) {
+          Doc doc = att.getDoc();
+          String base = "doc" + doc.getOwnerId() + "_" + doc.getId();
+          if (doc.getAccessKey() != null && !doc.getAccessKey().isEmpty()) {
+            base = base + "_" + doc.getAccessKey();
+          }
+          DocInfo info = new DocInfo();
+          info.attachment = base;
+          info.url = doc.getUrl() != null ? doc.getUrl().toString() : null;
+          return info;
+        }
+      }
+      return null;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return null;
+    }
+  }
+
+  private DocInfo extractDocInfoFromConversation(int peerId, int conversationMessageId) {
+    try {
+      var resp = vk.messages().getByConversationMessageId(actor, peerId, conversationMessageId)
         .groupId(config.groupId)
         .execute();
       if (resp.getItems() == null || resp.getItems().isEmpty()) {
