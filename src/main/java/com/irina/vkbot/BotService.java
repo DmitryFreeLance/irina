@@ -92,6 +92,14 @@ public class BotService {
       }
     }
 
+    if (isAdmin && payload != null && payload.cmd != null && payload.cmd.startsWith("admin_")) {
+      if (handleAdminPayload(peerId, userId, payload)) {
+        return;
+      }
+      showAdminMenu(peerId);
+      return;
+    }
+
     if (isAdmin && isAdminCommand(text, payload)) {
       showAdminMenu(peerId);
       return;
@@ -196,6 +204,7 @@ public class BotService {
     } else {
       sendMessage(peerId, text.toString(), null, magnet.attachment);
     }
+    sendMessage(peerId, "Если хотите посмотреть другие материалы, нажмите «Обновить материалы».", refreshKeyboard(), null);
     db.logEvent(userId, "magnet_sent", magnet.id);
   }
 
@@ -228,6 +237,10 @@ public class BotService {
       }
     }
 
+    rows.add(KeyboardBuilder.rows(
+      KeyboardBuilder.button("Обновить материалы", KeyboardBuilder.payload("list", "page", 0), "secondary")
+    ));
+
     String keyboard = KeyboardBuilder.keyboard(rows, false);
     sendMessage(peerId, "Выберите материал:", keyboard, null);
   }
@@ -243,6 +256,14 @@ public class BotService {
       KeyboardBuilder.button("Проверить подписку", KeyboardBuilder.payload("check_sub"), "positive")
     ));
     return KeyboardBuilder.keyboard(rows, true);
+  }
+
+  private String refreshKeyboard() {
+    List<List<Button>> rows = new ArrayList<>();
+    rows.add(KeyboardBuilder.rows(
+      KeyboardBuilder.button("Обновить материалы", KeyboardBuilder.payload("list", "page", 0), "secondary")
+    ));
+    return KeyboardBuilder.keyboard(rows, false);
   }
 
   private boolean isMember(int userId) {
@@ -509,36 +530,41 @@ public class BotService {
       return true;
     }
 
-    if (payload != null) {
-      if ("admin_add".equals(payload.cmd)) {
-        db.setAdminState(msg.from_id, STATE_ADD_TITLE, new JsonObject());
-        sendMessage(peerId, "Введите название материала.", null, null);
-        return true;
-      }
-      if ("admin_edit".equals(payload.cmd)) {
-        startEditFlow(peerId, msg.from_id);
-        return true;
-      }
-      if ("admin_delete".equals(payload.cmd)) {
-        startDeleteFlow(peerId, msg.from_id);
-        return true;
-      }
-      if ("admin_link".equals(payload.cmd)) {
-        startLinkFlow(peerId, msg.from_id);
-        return true;
-      }
-      if ("admin_stats".equals(payload.cmd)) {
-        showStats(peerId);
-        return true;
-      }
-      if ("admin_broadcast".equals(payload.cmd)) {
-        db.setAdminState(msg.from_id, STATE_BROADCAST, new JsonObject());
-        sendMessage(peerId, "Отправьте текст и/или файл для рассылки.", null, null);
-        return true;
-      }
+    if (payload != null && handleAdminPayload(peerId, msg.from_id, payload)) {
+      return true;
     }
 
     return false;
+  }
+
+  private boolean handleAdminPayload(int peerId, int userId, PayloadData payload) {
+    if (payload == null || payload.cmd == null) {
+      return false;
+    }
+    switch (payload.cmd) {
+      case "admin_add":
+        db.setAdminState(userId, STATE_ADD_TITLE, new JsonObject());
+        sendMessage(peerId, "Введите название материала.", null, null);
+        return true;
+      case "admin_edit":
+        startEditFlow(peerId, userId);
+        return true;
+      case "admin_delete":
+        startDeleteFlow(peerId, userId);
+        return true;
+      case "admin_link":
+        startLinkFlow(peerId, userId);
+        return true;
+      case "admin_stats":
+        showStats(peerId);
+        return true;
+      case "admin_broadcast":
+        db.setAdminState(userId, STATE_BROADCAST, new JsonObject());
+        sendMessage(peerId, "Отправьте текст и/или файл для рассылки.", null, null);
+        return true;
+      default:
+        return false;
+    }
   }
 
   private void startEditFlow(int peerId, int userId) {
