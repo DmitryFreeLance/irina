@@ -18,6 +18,7 @@ class UpdateObject {
 }
 
 class LpMessage {
+  int id;
   int from_id;
   int peer_id;
   String text;

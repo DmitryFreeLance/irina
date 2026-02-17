@@ -6,6 +6,9 @@ import com.vk.api.sdk.client.VkApiClient;
 import com.vk.api.sdk.client.actors.GroupActor;
 import com.vk.api.sdk.objects.groups.responses.GetLongPollServerResponse;
 import com.vk.api.sdk.objects.groups.responses.IsMemberResponse;
+import com.vk.api.sdk.objects.messages.MessageAttachment;
+import com.vk.api.sdk.objects.messages.MessageAttachmentType;
+import com.vk.api.sdk.objects.docs.Doc;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -202,12 +205,22 @@ public class BotService {
       text.append("Ссылка: ").append(magnet.url);
       sendMessage(peerId, text.toString(), null, null);
     } else {
-      boolean sent = sendMessageSafe(peerId, text.toString(), null, magnet.attachment);
-      if (!sent) {
+      if (magnet.attachment == null || magnet.attachment.isEmpty()) {
         if (magnet.url != null && !magnet.url.isEmpty()) {
-          sendMessage(peerId, "Не удалось отправить файл. Вот ссылка на скачивание:\n" + magnet.url, null, null);
+          sendMessage(peerId, text.toString(), null, null);
+          sendMessage(peerId, "Файл недоступен, вот ссылка на скачивание:\n" + magnet.url, null, null);
         } else {
-          sendMessage(peerId, "Не удалось отправить файл. Попробуйте позже или обратитесь к администратору.", null, null);
+          sendMessage(peerId, text.toString(), null, null);
+          sendMessage(peerId, "Файл недоступен. Попробуйте позже или обратитесь к администратору.", null, null);
+        }
+      } else {
+        boolean sent = sendMessageSafe(peerId, text.toString(), null, magnet.attachment);
+        if (!sent) {
+          if (magnet.url != null && !magnet.url.isEmpty()) {
+            sendMessage(peerId, "Не удалось отправить файл. Вот ссылка на скачивание:\n" + magnet.url, null, null);
+          } else {
+            sendMessage(peerId, "Не удалось отправить файл. Попробуйте позже или обратитесь к администратору.", null, null);
+          }
         }
       }
     }
@@ -366,6 +379,10 @@ public class BotService {
       int id = db.createMagnet(m);
       db.clearAdminState(msg.from_id);
       sendMessage(peerId, "Материал добавлен. ID: " + id, null, null);
+      boolean ok = sendMessageSafe(peerId, "Проверка выдачи файла (должен прийти документ).", null, m.attachment);
+      if (!ok) {
+        sendMessage(peerId, "Проверка выдачи не прошла. Попробуйте переотправить файл.", null, null);
+      }
       return true;
     }
 
@@ -735,6 +752,17 @@ public class BotService {
   }
 
   private DocInfo extractDocInfo(LpMessage msg) {
+    DocInfo info = extractDocInfoFromLp(msg);
+    if (info != null) {
+      return info;
+    }
+    if (msg.id > 0) {
+      return extractDocInfoFromApi(msg.id);
+    }
+    return null;
+  }
+
+  private DocInfo extractDocInfoFromLp(LpMessage msg) {
     if (msg.attachments == null) {
       return null;
     }
@@ -752,6 +780,38 @@ public class BotService {
       }
     }
     return null;
+  }
+
+  private DocInfo extractDocInfoFromApi(int messageId) {
+    try {
+      var resp = vk.messages().getById(actor, messageId)
+        .groupId(config.groupId)
+        .execute();
+      if (resp.getItems() == null || resp.getItems().isEmpty()) {
+        return null;
+      }
+      var msg = resp.getItems().get(0);
+      if (msg.getAttachments() == null) {
+        return null;
+      }
+      for (MessageAttachment att : msg.getAttachments()) {
+        if (att.getType() == MessageAttachmentType.DOC && att.getDoc() != null) {
+          Doc doc = att.getDoc();
+          String base = "doc" + doc.getOwnerId() + "_" + doc.getId();
+          if (doc.getAccessKey() != null && !doc.getAccessKey().isEmpty()) {
+            base = base + "_" + doc.getAccessKey();
+          }
+          DocInfo info = new DocInfo();
+          info.attachment = base;
+          info.url = doc.getUrl() != null ? doc.getUrl().toString() : null;
+          return info;
+        }
+      }
+      return null;
+    } catch (Exception e) {
+      e.printStackTrace();
+      return null;
+    }
   }
 
   private String extractDocAttachment(LpMessage msg) {
