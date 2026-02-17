@@ -9,7 +9,17 @@ import com.vk.api.sdk.objects.groups.responses.IsMemberResponse;
 import com.vk.api.sdk.objects.messages.MessageAttachment;
 import com.vk.api.sdk.objects.messages.MessageAttachmentType;
 import com.vk.api.sdk.objects.docs.Doc;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -21,6 +31,7 @@ public class BotService {
   private final VkApiClient vk;
   private final GroupActor actor;
   private final LongPollClient longPoll = new LongPollClient();
+  private final OkHttpClient http = new OkHttpClient();
 
   private static final String STATE_ADD_TITLE = "ADMIN_ADD_TITLE";
   private static final String STATE_ADD_DESC = "ADMIN_ADD_DESC";
@@ -368,6 +379,10 @@ public class BotService {
         sendMessage(peerId, "Не вижу файла. Отправьте материал документом.", null, null);
         return true;
       }
+      DocInfo stored = reuploadDocToGroup(info, msg.peer_id);
+      if (stored != null) {
+        info = stored;
+      }
       System.out.println("[DEBUG] add-file: attachment=" + info.attachment + " url=" + info.url +
         " msgId=" + msg.id + " convMsgId=" + msg.conversation_message_id + " peerId=" + msg.peer_id);
       Magnet m = new Magnet();
@@ -458,6 +473,10 @@ public class BotService {
         if (info == null) {
           sendMessage(peerId, "Не вижу файла. Отправьте документ.", null, null);
           return true;
+        }
+        DocInfo stored = reuploadDocToGroup(info, msg.peer_id);
+        if (stored != null) {
+          info = stored;
         }
         m.attachment = info.attachment;
         m.url = info.url;
@@ -781,6 +800,7 @@ public class BotService {
         DocInfo info = new DocInfo();
         info.attachment = base;
         info.url = doc.url;
+        info.title = doc.title;
         return info;
       }
     }
@@ -809,6 +829,7 @@ public class BotService {
           DocInfo info = new DocInfo();
           info.attachment = base;
           info.url = doc.getUrl() != null ? doc.getUrl().toString() : null;
+          info.title = doc.getTitle();
           return info;
         }
       }
@@ -841,6 +862,7 @@ public class BotService {
           DocInfo info = new DocInfo();
           info.attachment = base;
           info.url = doc.getUrl() != null ? doc.getUrl().toString() : null;
+          info.title = doc.getTitle();
           return info;
         }
       }
@@ -848,6 +870,87 @@ public class BotService {
     } catch (Exception e) {
       e.printStackTrace();
       return null;
+    }
+  }
+
+  private DocInfo reuploadDocToGroup(DocInfo info, int peerId) {
+    if (info == null || info.url == null || info.url.isEmpty()) {
+      return null;
+    }
+    String fileName = (info.title != null && !info.title.isEmpty()) ? info.title : "file.bin";
+    File tmp = null;
+    try {
+      tmp = downloadToTemp(info.url, fileName);
+      var upload = vk.docs().getMessagesUploadServer(actor)
+        .peerId(peerId)
+        .execute();
+
+      RequestBody fileBody = RequestBody.create(tmp, MediaType.parse("application/octet-stream"));
+      MultipartBody requestBody = new MultipartBody.Builder()
+        .setType(MultipartBody.FORM)
+        .addFormDataPart("file", fileName, fileBody)
+        .build();
+
+      Request uploadReq = new Request.Builder()
+        .url(upload.getUploadUrl().toString())
+        .post(requestBody)
+        .build();
+
+      try (Response uploadResp = http.newCall(uploadReq).execute()) {
+        if (!uploadResp.isSuccessful()) {
+          System.out.println("[DEBUG] upload failed: " + uploadResp.code());
+          return null;
+        }
+        String body = uploadResp.body() != null ? uploadResp.body().string() : "{}";
+        UploadResponse ur = new com.google.gson.Gson().fromJson(body, UploadResponse.class);
+        if (ur == null || ur.file == null) {
+          System.out.println("[DEBUG] upload response missing file");
+          return null;
+        }
+        var save = vk.docs().save(actor, ur.file)
+          .title(fileName)
+          .execute();
+        Doc doc = save.getDoc();
+        if (doc == null) {
+          return null;
+        }
+        DocInfo stored = new DocInfo();
+        String base = "doc" + doc.getOwnerId() + "_" + doc.getId();
+        if (doc.getAccessKey() != null && !doc.getAccessKey().isEmpty()) {
+          base = base + "_" + doc.getAccessKey();
+        }
+        stored.attachment = base;
+        stored.url = doc.getUrl() != null ? doc.getUrl().toString() : null;
+        stored.title = doc.getTitle();
+        System.out.println("[DEBUG] reupload ok: attachment=" + stored.attachment + " url=" + stored.url);
+        return stored;
+      }
+    } catch (Exception e) {
+      e.printStackTrace();
+      return null;
+    } finally {
+      if (tmp != null && tmp.exists()) {
+        tmp.delete();
+      }
+    }
+  }
+
+  private File downloadToTemp(String url, String fileName) throws IOException {
+    Request req = new Request.Builder().url(url).get().build();
+    try (Response resp = http.newCall(req).execute()) {
+      if (!resp.isSuccessful()) {
+        throw new IOException("Download failed: " + resp.code());
+      }
+      File tmp = File.createTempFile("vkdoc-", "-" + fileName.replaceAll("\\s+", "_"));
+      try (InputStream in = resp.body().byteStream();
+           FileOutputStream out = new FileOutputStream(tmp)) {
+        byte[] buf = new byte[8192];
+        int r;
+        while ((r = in.read(buf)) != -1) {
+          out.write(buf, 0, r);
+        }
+      }
+      return tmp;
     }
   }
 
@@ -915,4 +1018,9 @@ class RefCode {
 class DocInfo {
   String attachment;
   String url;
+  String title;
+}
+
+class UploadResponse {
+  String file;
 }
