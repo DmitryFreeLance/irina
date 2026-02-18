@@ -352,13 +352,18 @@ public class BotService {
         KeyboardBuilder.button("Файл", KeyboardBuilder.payload("admin_add_type", "type", "DOC"), "primary"),
         KeyboardBuilder.button("Ссылка", KeyboardBuilder.payload("admin_add_type", "type", "URL"), "secondary")
       ));
-      sendMessage(peerId, "Выберите тип материала:", KeyboardBuilder.keyboard(rows, true), null);
+      sendMessage(peerId, "Выберите тип материала:", KeyboardBuilder.keyboard(rows, false), null);
       return true;
     }
 
     if (STATE_ADD_TYPE.equals(st)) {
       if (payload == null || !"admin_add_type".equals(payload.cmd)) {
-        sendMessage(peerId, "Выберите тип через кнопки ниже.", null, null);
+        List<List<Button>> rows = new ArrayList<>();
+        rows.add(KeyboardBuilder.rows(
+          KeyboardBuilder.button("Файл", KeyboardBuilder.payload("admin_add_type", "type", "DOC"), "primary"),
+          KeyboardBuilder.button("Ссылка", KeyboardBuilder.payload("admin_add_type", "type", "URL"), "secondary")
+        ));
+        sendMessage(peerId, "Выберите тип через кнопки ниже.", KeyboardBuilder.keyboard(rows, false), null);
         return true;
       }
       String type = payload.type;
