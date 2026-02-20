@@ -658,8 +658,9 @@ public class BotService {
     List<Magnet> magnets = db.listMagnets(false, 0, 20);
     List<List<Button>> rows = new ArrayList<>();
     for (Magnet m : magnets) {
+      String label = safeLabel(m.id + ". " + m.title);
       rows.add(KeyboardBuilder.rows(
-        KeyboardBuilder.button(m.id + ". " + m.title, KeyboardBuilder.payload(cmd, "id", m.id), "primary")
+        KeyboardBuilder.button(label, KeyboardBuilder.payload(cmd, "id", m.id), "primary")
       ));
     }
     sendMessage(peerId, title, KeyboardBuilder.keyboard(rows, false), null);
@@ -764,6 +765,18 @@ public class BotService {
     PayloadData pd = new PayloadData();
     pd.cmd = cmd;
     return pd;
+  }
+
+  private String safeLabel(String label) {
+    if (label == null) {
+      return "";
+    }
+    String trimmed = label.trim();
+    int max = 40;
+    if (trimmed.length() <= max) {
+      return trimmed;
+    }
+    return trimmed.substring(0, 37) + "...";
   }
 
   private PayloadData parsePayload(String payload) {
