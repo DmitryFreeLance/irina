@@ -436,7 +436,7 @@ public class BotService {
     if (STATE_EDIT_SELECT.equals(st)) {
       Integer id = extractId(payload, text, "admin_edit_select");
       if (id == null) {
-        sendMessage(peerId, "Выберите материал кнопкой ниже или введите его ID.", null, null);
+        showAdminMagnetList(peerId, "Выберите материал для редактирования:", "admin_edit_select");
         return true;
       }
       data.addProperty("id", id);
@@ -524,7 +524,7 @@ public class BotService {
     if (STATE_DELETE_SELECT.equals(st)) {
       Integer id = extractId(payload, text, "admin_delete_select");
       if (id == null) {
-        sendMessage(peerId, "Выберите материал кнопкой ниже или введите его ID.", null, null);
+        showAdminMagnetList(peerId, "Выберите материал для удаления:", "admin_delete_select");
         return true;
       }
       db.deleteMagnet(id);
@@ -536,7 +536,7 @@ public class BotService {
     if (STATE_LINK_SELECT.equals(st)) {
       Integer id = extractId(payload, text, "admin_link_select");
       if (id == null) {
-        sendMessage(peerId, "Выберите материал кнопкой ниже или введите его ID.", null, null);
+        showAdminMagnetList(peerId, "Выберите материал для ссылки:", "admin_link_select");
         return true;
       }
       Magnet m = db.getMagnetById(id);
