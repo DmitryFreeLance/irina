@@ -98,6 +98,12 @@ public class BotService {
 
     PayloadData payload = parsePayload(msg.payload);
     String text = msg.text != null ? msg.text.trim() : "";
+    if (isAdmin && (payload == null || payload.cmd == null)) {
+      PayloadData fromText = adminPayloadFromText(text);
+      if (fromText != null) {
+        payload = fromText;
+      }
+    }
 
     AdminState adminState = isAdmin ? db.getAdminState(userId) : null;
     if (isAdmin && adminState != null) {
@@ -539,7 +545,7 @@ public class BotService {
         sendMessage(peerId, "Материал не найден.", null, null);
         return true;
       }
-      String link = "https://vk.com/club" + config.groupId + "?ref=" + m.refCode;
+      String link = buildMagnetLink(m);
       sendMessage(peerId, "Уникальная ссылка для «" + m.title + "»:\n" + link, null, null);
       return true;
     }
@@ -726,6 +732,38 @@ public class BotService {
       return true;
     }
     return payload != null && Objects.equals(payload.cmd, "start");
+  }
+
+  private PayloadData adminPayloadFromText(String text) {
+    if (text == null) {
+      return null;
+    }
+    String t = text.toLowerCase();
+    if (t.contains("добавить")) {
+      return payload("admin_add");
+    }
+    if (t.contains("редакт")) {
+      return payload("admin_edit");
+    }
+    if (t.contains("удал")) {
+      return payload("admin_delete");
+    }
+    if (t.contains("ссылк")) {
+      return payload("admin_link");
+    }
+    if (t.contains("статист")) {
+      return payload("admin_stats");
+    }
+    if (t.contains("рассыл")) {
+      return payload("admin_broadcast");
+    }
+    return null;
+  }
+
+  private PayloadData payload(String cmd) {
+    PayloadData pd = new PayloadData();
+    pd.cmd = cmd;
+    return pd;
   }
 
   private PayloadData parsePayload(String payload) {
@@ -962,6 +1000,10 @@ public class BotService {
   private String extractDocAttachment(LpMessage msg) {
     DocInfo info = extractDocInfo(msg);
     return info != null ? info.attachment : null;
+  }
+
+  private String buildMagnetLink(Magnet magnet) {
+    return "https://vk.me/club" + config.groupId + "?ref=" + magnet.refCode;
   }
 
   private String getPendingRef(int userId) {
